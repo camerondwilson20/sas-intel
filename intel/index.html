@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAS Intel Platform</title>
+<link rel="stylesheet" href="../shared/styles.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  body { padding-top: 0; }
+  .section { display: none; }
+  .section.active { display: block; }
+  .pipeline-col-cold    { background: #f1f3f5; color: #495057; }
+  .pipeline-col-warm    { background: #dbeafe; color: #1d4ed8; }
+  .pipeline-col-hot     { background: #fef3e2; color: #c05621; }
+  .pipeline-col-loi     { background: rgba(201,168,76,.15); color: #8a6d1a; }
+  .pipeline-col-uc      { background: #d4edda; color: #1a5e34; }
+</style>
+</head>
+<body>
+<script src="../shared/db.js"></script>
+<script src="../shared/nav.js"></script>
+
+<div class="page-wrap" id="app">
+
+<!-- ===== DASHBOARD ===== -->
+<section id="sec-dashboard" class="section active">
+  <div class="page-header">
+    <div>
+      <div class="page-title">SAS Intel Dashboard</div>
+      <div class="page-subtitle">Team intelligence hub — off-market properties, requirements, contacts &amp; deals</div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-gold" onclick="runMatchEngine()">&#9889; Run Match Engine</button>
+      <button class="btn btn-primary" onclick="showSection('properties')">+ Add Property</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-grid" id="dash-stats"></div>
+
+  <!-- Stale alert -->
+  <div id="stale-alert" class="stale-alert hidden">
+    &#9888; <span id="stale-msg"></span>
+    <button class="btn btn-sm btn-outline" style="margin-left:auto" onclick="showSection('pipeline')">View Stale</button>
+  </div>
+
+  <!-- Match results -->
+  <div id="dash-matches" class="hidden">
+    <div class="page-header" style="margin-top:8px">
+      <div class="page-title" style="font-size:16px">&#9889; AI Match Results</div>
+      <span class="text-muted text-small" id="match-count"></span>
+    </div>
+    <div id="match-list"></div>
+  </div>
+
+  <!-- Recent activity -->
+  <div class="card mt-4">
+    <div class="card-header">
+      <span class="card-title">Recent Activity</span>
+    </div>
+    <div class="card-body">
+      <ul class="activity-list" id="activity-feed"></ul>
+    </div>
+  </div>
+</section>
+
+<!-- ===== PIPELINE (OFF-MARKET PROPERTIES) ===== -->
+<section id="sec-properties" class="section">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Off-Market Pipeline</div>
+      <div class="page-subtitle">Track every off-market property and owner relationship</div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-outline" onclick="togglePipelineView()">&#9776; Toggle View</button>
+      <button class="btn btn-primary" onclick="openPropModal()">+ Add Property</button>
+    </div>
+  </div>
+
+  <!-- Search + Filter -->
+  <div class="search-bar mb-4">
+    <div class="search-input-wrap">
+      <span class="search-icon">&#128269;</span>
+      <input type="text" id="prop-search" placeholder="Search properties, owners, addresses..." oninput="renderProperties()">
+    </div>
+    <select id="prop-filter-stage" onchange="renderProperties()">
+      <option value="">All Stages</option>
+      <option>Cold</option><option>Warm</option><option>Hot</option>
+      <option>LOI</option><option>UC</option><option>Closed</option><option>Dead</option>
+    </select>
+    <select id="prop-filter-type" onchange="renderProperties()">
+      <option value="">All Types</option>
+      <option>Industrial</option><option>Flex</option><option>Office</option>
+      <option>Retail</option><option>Land</option><option>Mixed Use</option><option>Other</option>
+    </select>
+    <select id="prop-filter-sub" onchange="renderProperties()">
+      <option value="">All Submarkets</option>
+      <option>RDU / Airport</option><option>I-40 Corridor</option><option>I-85 Corridor</option>
+      <option>Downtown Raleigh</option><option>North Raleigh</option><option>Cary / Apex</option>
+      <option>Durham</option><option>Chapel Hill</option><option>Garner / Clayton</option>
+      <option>Triangle Wide</option>
+    </select>
+  </div>
+
+  <!-- Pipeline kanban -->
+  <div id="pipeline-kanban" class="pipeline-cols"></div>
+
+  <!-- List view (hidden by default) -->
+  <div id="pipeline-table" class="hidden">
+    <div class="tbl-wrap">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Address</th><th>Owner</th><th>Type</th><th>SF</th>
+            <th>Submarket</th><th>Stage</th><th>Last Touch</th><th>Source</th><th>Added By</th>
+          </tr>
+        </thead>
+        <tbody id="prop-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ===== REQUIREMENTS ===== -->
+<section id="sec-requirements" class="section">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Active Requirements / ISOs</div>
+      <div class="page-subtitle">Every known buyer and tenant requirement in the market</div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-outline" onclick="openPairlistParser()">&#128276; Pairlist Parser</button>
+      <button class="btn btn-outline" onclick="openCSVImport('requirements')">&#8679; CSV Import</button>
+      <button class="btn btn-primary" onclick="openReqModal()">+ Add Requirement</button>
+    </div>
+  </div>
+
+  <div class="search-bar mb-4">
+    <div class="search-input-wrap">
+      <span class="search-icon">&#128269;</span>
+      <input type="text" id="req-search" placeholder="Search requirements, brokers, companies..." oninput="renderRequirements()">
+    </div>
+    <select id="req-filter-type" onchange="renderRequirements()">
+      <option value="">All Types</option>
+      <option>Industrial</option><option>Flex</option><option>Office</option>
+      <option>Retail</option><option>Land</option><option>Mixed Use</option>
+    </select>
+    <select id="req-filter-status" onchange="renderRequirements()">
+      <option value="">All Status</option><option>Active</option><option>Stale</option><option>Closed</option>
+    </select>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Buyer / Tenant</th><th>Rep Broker</th><th>Type</th><th>Size Range</th>
+          <th>Budget</th><th>Submarket</th><th>Status</th><th>Days Old</th><th>Source</th>
+        </tr>
+      </thead>
+      <tbody id="req-tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===== CONTACTS ===== -->
+<section id="sec-contacts" class="section">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Broker &amp; Principal Contacts</div>
+      <div class="page-subtitle">Every broker, owner, and principal relationship in one place</div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-outline" onclick="openCSVImport('contacts')">&#8679; CSV Import</button>
+      <button class="btn btn-primary" onclick="openContactModal()">+ Add Contact</button>
+    </div>
+  </div>
+
+  <div class="search-bar mb-4">
+    <div class="search-input-wrap">
+      <span class="search-icon">&#128269;</span>
+      <input type="text" id="contact-search" placeholder="Search contacts, firms, specialties..." oninput="renderContacts()">
+    </div>
+    <select id="contact-filter-role" onchange="renderContacts()">
+      <option value="">All Roles</option>
+      <option>Broker</option><option>Owner</option><option>Tenant Rep</option>
+      <option>Developer</option><option>Investor</option><option>Other</option>
+    </select>
+    <select id="contact-filter-rel" onchange="renderContacts()">
+      <option value="">All Strengths</option>
+      <option>Hot</option><option>Warm</option><option>Cold</option>
+    </select>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Name</th><th>Firm</th><th>Role</th><th>Specialty</th>
+          <th>Phone</th><th>Email</th><th>Relationship</th><th>Last Touch</th><th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="contact-tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===== MARKET INTEL ===== -->
+<section id="sec-intel" class="section">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Market Intelligence</div>
+      <div class="page-subtitle">NCDOT projects, permits, zoning changes, supply pipeline</div>
+    </div>
+    <button class="btn btn-primary" onclick="openIntelModal()">+ Add Intel</button>
+  </div>
+
+  <div class="search-bar mb-4">
+    <div class="search-input-wrap">
+      <span class="search-icon">&#128269;</span>
+      <input type="text" id="intel-search" placeholder="Search market intel..." oninput="renderIntel()">
+    </div>
+    <select id="intel-filter-type" onchange="renderIntel()">
+      <option value="">All Types</option>
+      <option>NCDOT / Road</option><option>Permit</option><option>Zoning</option>
+      <option>New Construction</option><option>Absorption</option><option>Lease Comp</option>
+      <option>Sale Comp</option><option>Other</option>
+    </select>
+    <select id="intel-filter-sub" onchange="renderIntel()">
+      <option value="">All Submarkets</option>
+      <option>RDU / Airport</option><option>I-40 Corridor</option><option>I-85 Corridor</option>
+      <option>Downtown Raleigh</option><option>Cary / Apex</option><option>Durham</option>
+      <option>Triangle Wide</option>
+    </select>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Title</th><th>Type</th><th>Submarket</th><th>Impact</th>
+          <th>Date</th><th>Source</th><th>Linked Properties</th><th>Added By</th>
+        </tr>
+      </thead>
+      <tbody id="intel-tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ===== DEAL HISTORY ===== -->
+<section id="sec-deals" class="section">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Deal History</div>
+      <div class="page-subtitle">Every SAS closed transaction — lessons learned, relationships, benchmarks</div>
+    </div>
+    <button class="btn btn-primary" onclick="openDealModal()">+ Add Deal</button>
+  </div>
+
+  <div class="search-bar mb-4">
+    <div class="search-input-wrap">
+      <span class="search-icon">&#128269;</span>
+      <input type="text" id="deal-search" placeholder="Search deals, clients, properties..." oninput="renderDeals()">
+    </div>
+    <select id="deal-filter-type" onchange="renderDeals()">
+      <option value="">All Types</option>
+      <option>Sale</option><option>Lease</option><option>Land</option>
+    </select>
+  </div>
+
+  <div class="tbl-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Property</th><th>Type</th><th>Client</th><th>Close Date</th>
+          <th>Price / Rate</th><th>SF</th><th>$/SF</th><th>Cap Rate</th><th>Our Role</th><th>Broker</th>
+        </tr>
+      </thead>
+      <tbody id="deal-tbody"></tbody>
+    </table>
+  </div>
+</section>
+
+</div><!-- /app -->
+
+<!-- ================================================================
+     MODALS
+================================================================ -->
+
+<!-- Property Modal -->
+<div id="prop-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="prop-modal-title">Add Property</span>
+      <button class="modal-close" onclick="closePropModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Address / Property Name *</label>
+          <input type="text" id="p-address" placeholder="123 Main St, Raleigh, NC">
+        </div>
+        <div class="form-group">
+          <label>Owner Name</label>
+          <input type="text" id="p-owner" placeholder="John Smith or ABC LLC">
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Property Type</label>
+          <select id="p-type">
+            <option value="">Select...</option>
+            <option>Industrial</option><option>Flex</option><option>Office</option>
+            <option>Retail</option><option>Land</option><option>Mixed Use</option><option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Square Feet / Acres</label>
+          <input type="text" id="p-sf" placeholder="e.g. 12500 or 2.4 acres">
+        </div>
+        <div class="form-group">
+          <label>Submarket</label>
+          <select id="p-sub">
+            <option value="">Select...</option>
+            <option>RDU / Airport</option><option>I-40 Corridor</option><option>I-85 Corridor</option>
+            <option>Downtown Raleigh</option><option>North Raleigh</option><option>Cary / Apex</option>
+            <option>Durham</option><option>Chapel Hill</option><option>Garner / Clayton</option>
+            <option>Triangle Wide</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Stage</label>
+          <select id="p-stage">
+            <option>Cold</option><option>Warm</option><option>Hot</option>
+            <option>LOI</option><option>UC</option><option>Closed</option><option>Dead</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Asking Price</label>
+          <input type="text" id="p-price" placeholder="e.g. 1250000 or $8.50/SF NNN">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Owner Phone</label>
+          <input type="tel" id="p-phone" placeholder="(919) 555-0100">
+        </div>
+        <div class="form-group">
+          <label>Owner Email</label>
+          <input type="email" id="p-email" placeholder="owner@email.com">
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Source</label>
+          <select id="p-source">
+            <option value="">Select...</option>
+            <option>Cold Call</option><option>Direct Mail</option><option>Driving for Dollars</option>
+            <option>Referral</option><option>Broker Network</option><option>Pairlist</option>
+            <option>TBJ / News</option><option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Zoning</label>
+          <input type="text" id="p-zoning" placeholder="e.g. I-1, GI, NB">
+        </div>
+        <div class="form-group">
+          <label>Added By</label>
+          <select id="p-by">
+            <option>Cwilly</option>
+            <option>Team Member 2</option>
+            <option>Team Member 3</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Owner Motivation</label>
+          <select id="p-motivation">
+            <option value="">Unknown</option>
+            <option>High — Ready to sell</option><option>Medium — Open to offers</option>
+            <option>Low — Just exploring</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Follow-up Date</label>
+          <input type="date" id="p-followup">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="p-notes" placeholder="Owner details, call notes, property condition, anything relevant..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePropModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProp()">Save Property</button>
+    </div>
+  </div>
+</div>
+
+<!-- Requirement Modal -->
+<div id="req-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="req-modal-title">Add Requirement</span>
+      <button class="modal-close" onclick="closeReqModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Buyer / Tenant Name *</label>
+          <input type="text" id="r-buyer" placeholder="Company or individual name">
+        </div>
+        <div class="form-group">
+          <label>Rep Broker</label>
+          <input type="text" id="r-broker" placeholder="Broker name &amp; firm">
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Property Type</label>
+          <select id="r-type">
+            <option value="">Select...</option>
+            <option>Industrial</option><option>Flex</option><option>Office</option>
+            <option>Retail</option><option>Land</option><option>Mixed Use</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Min SF</label>
+          <input type="number" id="r-sf-min" placeholder="5000">
+        </div>
+        <div class="form-group">
+          <label>Max SF</label>
+          <input type="number" id="r-sf-max" placeholder="20000">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Budget / Max Rate</label>
+          <input type="text" id="r-budget" placeholder="e.g. $8.50/SF NNN or $2.5M">
+        </div>
+        <div class="form-group">
+          <label>Submarket Preference</label>
+          <select id="r-sub">
+            <option>Triangle Wide</option>
+            <option>RDU / Airport</option><option>I-40 Corridor</option><option>I-85 Corridor</option>
+            <option>Downtown Raleigh</option><option>North Raleigh</option><option>Cary / Apex</option>
+            <option>Durham</option><option>Chapel Hill</option><option>Garner / Clayton</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Timeline</label>
+          <input type="text" id="r-timeline" placeholder="e.g. Q3 2026, ASAP, 6-12 months">
+        </div>
+        <div class="form-group">
+          <label>Source</label>
+          <select id="r-source">
+            <option value="">Select...</option>
+            <option>Pairlist</option><option>Direct Call</option><option>Referral</option>
+            <option>TBJ</option><option>ICSC</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Status</label>
+          <select id="r-status">
+            <option>Active</option><option>Stale</option><option>Closed</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Added By</label>
+          <select id="r-by">
+            <option>Cwilly</option><option>Team Member 2</option><option>Team Member 3</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Must-Haves</label>
+        <input type="text" id="r-must" placeholder="e.g. dock doors, 24-ft clear, 3-phase power, yard space">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="r-notes" placeholder="Additional context, flexibility, deal structure preferences..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeReqModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveReq()">Save Requirement</button>
+    </div>
+  </div>
+</div>
+
+<!-- Contact Modal -->
+<div id="contact-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="contact-modal-title">Add Contact</span>
+      <button class="modal-close" onclick="closeContactModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="c-name" placeholder="First Last">
+        </div>
+        <div class="form-group">
+          <label>Firm / Company</label>
+          <input type="text" id="c-firm" placeholder="JLL, CBRE, Independent...">
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Role</label>
+          <select id="c-role">
+            <option value="">Select...</option>
+            <option>Broker</option><option>Owner</option><option>Tenant Rep</option>
+            <option>Developer</option><option>Investor</option><option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Specialty / Asset Type</label>
+          <input type="text" id="c-specialty" placeholder="Industrial, Retail, Land...">
+        </div>
+        <div class="form-group">
+          <label>Relationship</label>
+          <select id="c-rel">
+            <option>Cold</option><option>Warm</option><option>Hot</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Phone</label>
+          <input type="tel" id="c-phone" placeholder="(919) 555-0100">
+        </div>
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="c-email" placeholder="name@firm.com">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Known Activity / Clients</label>
+        <input type="text" id="c-activity" placeholder="e.g. Reps Amazon, active in I-40 corridor, looking for 50k+ SF">
+      </div>
+      <div class="form-group">
+        <label>Notes</label>
+        <textarea id="c-notes" placeholder="Relationship history, deal notes, best way to reach..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeContactModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveContact()">Save Contact</button>
+    </div>
+  </div>
+</div>
+
+<!-- Market Intel Modal -->
+<div id="intel-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title" id="intel-modal-title">Add Market Intel</span>
+      <button class="modal-close" onclick="closeIntelModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Title *</label>
+        <input type="text" id="i-title" placeholder="Brief descriptive title">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Type</label>
+          <select id="i-type">
+            <option value="">Select...</option>
+            <option>NCDOT / Road</option><option>Permit</option><option>Zoning</option>
+            <option>New Construction</option><option>Absorption</option>
+            <option>Lease Comp</option><option>Sale Comp</option><option>Other</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Submarket</label>
+          <select id="i-sub">
+            <option>Triangle Wide</option>
+            <option>RDU / Airport</option><option>I-40 Corridor</option><option>I-85 Corridor</option>
+            <option>Downtown Raleigh</option><option>North Raleigh</option><option>Cary / Apex</option>
+            <option>Durham</option><option>Chapel Hill</option><option>Garner / Clayton</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Impact Level</label>
+          <select id="i-impact">
+            <option>High</option><option>Medium</option><option>Low</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Date</label>
+          <input type="date" id="i-date">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Source / URL</label>
+          <input type="text" id="i-source" placeholder="CoStar, TBJ, NCDOT, direct knowledge...">
+        </div>
+        <div class="form-group">
+          <label>Linked Properties (addresses, comma-sep)</label>
+          <input type="text" id="i-props" placeholder="123 Main St, 456 Oak Ave">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Details</label>
+        <textarea id="i-notes" placeholder="Full details, data points, implications for SAS..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeIntelModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveIntel()">Save Intel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Deal Modal -->
+<div id="deal-modal" class="modal-backdrop hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="deal-modal-title">Add Deal</span>
+      <button class="modal-close" onclick="closeDealModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Property Address *</label>
+          <input type="text" id="d-address" placeholder="123 Commerce Dr, Garner, NC">
+        </div>
+        <div class="form-group">
+          <label>Deal Type</label>
+          <select id="d-type">
+            <option>Sale</option><option>Lease</option><option>Land</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Client Name</label>
+          <input type="text" id="d-client" placeholder="Buyer, seller, or tenant name">
+        </div>
+        <div class="form-group">
+          <label>Our Role</label>
+          <select id="d-role">
+            <option>Listing</option><option>Buyer Rep</option><option>Dual</option>
+            <option>Tenant Rep</option><option>Landlord Rep</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Close Date</label>
+          <input type="date" id="d-close">
+        </div>
+        <div class="form-group">
+          <label>Price / Rate</label>
+          <input type="text" id="d-price" placeholder="$1,250,000 or $8.50/SF NNN">
+        </div>
+        <div class="form-group">
+          <label>Square Feet</label>
+          <input type="number" id="d-sf" placeholder="12500">
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group">
+          <label>Price per SF</label>
+          <input type="text" id="d-psf" placeholder="Auto-calc or override">
+        </div>
+        <div class="form-group">
+          <label>Cap Rate</label>
+          <input type="text" id="d-cap" placeholder="e.g. 6.5%">
+        </div>
+        <div class="form-group">
+          <label>Co-Broker</label>
+          <input type="text" id="d-cobroker" placeholder="Other side broker &amp; firm">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Lessons Learned / Notes</label>
+        <textarea id="d-notes" placeholder="What worked, what didn't, repeat deal probability, key relationships formed..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeDealModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveDeal()">Save Deal</button>
+    </div>
+  </div>
+</div>
+
+<!-- Pairlist Parser Modal -->
+<div id="pairlist-modal" class="modal-backdrop hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title">Pairlist ISO Parser</span>
+      <button class="modal-close" onclick="closePairlistParser()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted text-small mb-3">Paste the raw text of a Pairlist blast email below. The parser will extract all ISO / requirement entries and stage them for one-click import.</p>
+      <div class="form-group">
+        <label>Raw Pairlist Email Text</label>
+        <textarea id="pairlist-input" style="min-height:200px;font-family:monospace;font-size:12px" placeholder="Paste full email text here..."></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="parsePairlist()">Parse ISOs</button>
+      <div id="pairlist-results" class="mt-4"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closePairlistParser()">Close</button>
+      <button class="btn btn-gold" id="pairlist-import-btn" onclick="importPairlistResults()" style="display:none">Import All Staged</button>
+    </div>
+  </div>
+</div>
+
+<!-- CSV Import Modal -->
+<div id="csv-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <span class="modal-title">CSV Bulk Import</span>
+      <button class="modal-close" onclick="closeCSVImport()">&#x2715;</button>
+    </div>
+    <div class="modal-body">
+      <p class="text-muted text-small mb-3">Upload a CSV file. Column headers are matched automatically — first row must be headers.</p>
+      <div class="form-group">
+        <label>CSV File</label>
+        <input type="file" id="csv-file" accept=".csv">
+      </div>
+      <div id="csv-preview" class="mt-3"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeCSVImport()">Cancel</button>
+      <button class="btn btn-primary" id="csv-import-btn" onclick="doCSVImport()" style="display:none">Import Records</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail/Edit Modal -->
+<div id="detail-modal" class="modal-backdrop hidden">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <span class="modal-title" id="detail-title">Detail</span>
+      <button class="modal-close" onclick="closeDetailModal()">&#x2715;</button>
+    </div>
+    <div class="modal-body" id="detail-body"></div>
+    <div class="modal-footer" id="detail-footer"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// SAS INTEL — MAIN APPLICATION JAVASCRIPT
+// ================================================================
+
+let _editId = null;
+let _editCol = null;
+let _csvCol = null;
+let _csvRows = [];
+let _pairlistStaged = [];
+let _pipelineView = 'kanban';
+
+// ——— INIT ————————————————————————————————————————————
+document.addEventListener('DOMContentLoaded', () => {
+  _routeFromHash();
+  window.addEventListener('hashchange', _routeFromHash);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') _closeAllModals();
+    if (e.key === 'n' && !e.ctrlKey && !e.metaKey && document.activeElement === document.body) {
+      const sec = _currentSection();
+      if (sec === 'properties') openPropModal();
+      else if (sec === 'requirements') openReqModal();
+      else if (sec === 'contacts') openContactModal();
+      else if (sec === 'intel') openIntelModal();
+      else if (sec === 'deals') openDealModal();
+    }
+  });
+});
+
+function _currentSection() {
+  const s = window.location.hash.replace('#','');
+  return s || 'dashboard';
+}
+
+function _routeFromHash() {
+  const s = _currentSection();
+  document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
+  const target = document.getElementById('sec-' + s) || document.getElementById('sec-dashboard');
+  if (target) target.classList.add('active');
+  document.querySelectorAll('#sas-nav .nav-links a').forEach(a => {
+    a.classList.toggle('active', a.href.includes('#' + s));
+  });
+  _renderSection(s);
+}
+
+function showSection(s) {
+  window.location.hash = s;
+}
+
+function _renderSection(s) {
+  if (s === 'dashboard' || !s) renderDashboard();
+  else if (s === 'properties') renderProperties();
+  else if (s === 'requirements') renderRequirements();
+  else if (s === 'contacts') renderContacts();
+  else if (s === 'intel') renderIntel();
+  else if (s === 'deals') renderDeals();
+}
+
+// ——— DASHBOARD ——————————————————————————————————————
+function renderDashboard() {
+  const stats = SASDB.stats();
+  const grid = document.getElementById('dash-stats');
+  if (!grid) return;
+  grid.innerHTML = [
+    _statCard('Off-Market Properties', stats.properties.total, stats.properties.stale30 + ' stale', stats.properties.stale30 > 0 ? 'warn' : ''),
+    _statCard('Active Requirements', stats.requirements.total, stats.requirements.thisWeek + ' this week', 'gold'),
+    _statCard('Contacts', stats.contacts.total, stats.contacts.thisWeek + ' added this week', ''),
+    _statCard('Market Intel', stats.intel.total, '', ''),
+    _statCard('Closed Deals', stats.deals.total, '', 'success'),
+  ].join('');
+
+  const staleCount = stats.properties.stale30 + stats.requirements.stale30;
+  const alertEl = document.getElementById('stale-alert');
+  const msgEl = document.getElementById('stale-msg');
+  if (staleCount > 0) {
+    alertEl.classList.remove('hidden');
+    msgEl.textContent = staleCount + ' records have not been touched in 30+ days — time to follow up.';
+  } else {
+    alertEl.classList.add('hidden');
+  }
+
+  // Activity feed
+  const feed = document.getElementById('activity-feed');
+  const activity = SASDB.getActivity(20);
+  if (feed) {
+    if (!activity.length) {
+      feed.innerHTML = '<li class="text-muted text-small" style="padding:12px 0">No activity yet. Start adding properties and requirements.</li>';
+    } else {
+      feed.innerHTML = activity.map(a => `<li class="activity-item"><div class="activity-dot"></div><div class="activity-body"><div class="activity-text">${_cap(a.action)} <strong>${a.summary}<\/strong> in ${_colLabel(a.col)}<\/div><div class="activity-time">${_timeAgo(a.at)}<\/div><\/div><\/li>`).join('');
+    }
+  }
+
+  // Existing matches
+  const matches = SASDB.getMatches();
+  if (matches.length) _renderMatches(matches);
+}
+
+function _statCard(label, val, sub, cls) {
+  return `<div class="stat-card ${cls}"><div class="stat-label">${label}<\/div><div class="stat-value">${val}<\/div>${sub ? `<div class="stat-sub">${sub}<\/div>` : ''}<\/div>`;
+}
+
+function runMatchEngine() {
+  const matches = SASDB.runMatches();
+  _renderMatches(matches);
+}
+
+function _renderMatches(matches) {
+  const wrap = document.getElementById('dash-matches');
+  const list = document.getElementById('match-list');
+  const cnt = document.getElementById('match-count');
+  if (!wrap) return;
+  wrap.classList.remove('hidden');
+  cnt.textContent = matches.length + ' potential matches found';
+  if (!matches.length) {
+    list.innerHTML = '<div class="empty-state"><div class="empty-title">No matches yet</div><div class="empty-sub">Add more properties and requirements to see matches.<\/div><\/div>';
+    return;
+  }
+  list.innerHTML = matches.slice(0,20).map(m => {
+    const cls = m.score >= 70 ? 'high' : m.score >= 40 ? 'medium' : 'low';
+    return `<div class="match-item"><div class="match-score ${cls}">${m.score}%<\/div><div class="match-details"><div class="match-prop">&#127968; ${m.propertyAddress}<\/div><div class="match-req">&#128203; Req: ${m.requirementName}<\/div><\/div><button class="btn btn-sm btn-outline" onclick="alert('Property: ${m.propertyAddress}\nRequirement: ${m.requirementName}\nScore: ${m.score}%')">Details<\/button><\/div>`;
+  }).join('');
+}
+
+// ——— PROPERTIES / PIPELINE ——————————————————————————
+function renderProperties() {
+  const q = (document.getElementById('prop-search') || {}).value || '';
+  const stage = (document.getElementById('prop-filter-stage') || {}).value || '';
+  const type = (document.getElementById('prop-filter-type') || {}).value || '';
+  const sub = (document.getElementById('prop-filter-sub') || {}).value || '';
+  let data = SASDB.get('properties');
+  if (q) data = data.filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
+  if (stage) data = data.filter(r => r.stage === stage);
+  if (type) data = data.filter(r => r.propertyType === type);
+  if (sub) data = data.filter(r => r.submarket === sub);
+  if (_pipelineView === 'kanban') _renderKanban(data);
+  else _renderPropTable(data);
+}
+
+function togglePipelineView() {
+  _pipelineView = _pipelineView === 'kanban' ? 'table' : 'kanban';
+  const k = document.getElementById('pipeline-kanban');
+  const t = document.getElementById('pipeline-table');
+  if (_pipelineView === 'kanban') { k.classList.remove('hidden'); t.classList.add('hidden'); }
+  else { k.classList.add('hidden'); t.classList.remove('hidden'); }
+  renderProperties();
+}
+
+const STAGES = ['Cold','Warm','Hot','LOI','UC','Closed','Dead'];
+const STAGE_COLORS = { Cold:'pipeline-col-cold', Warm:'pipeline-col-warm', Hot:'pipeline-col-hot', LOI:'pipeline-col-loi', UC:'pipeline-col-uc', Closed:'pipeline-col-cold', Dead:'pipeline-col-cold' };
+
+function _renderKanban(data) {
+  const el = document.getElementById('pipeline-kanban');
+  if (!el) return;
+  el.innerHTML = STAGES.map(stage => {
+    const cards = data.filter(r => r.stage === stage);
+    const stale = cards.filter(r => SASDB.daysSince(r.lastTouch) >= 30);
+    return `<div class="pipeline-col"><div class="pipeline-col-header ${STAGE_COLORS[stage]||'pipeline-col-cold'}">${stage}<span class="count">${cards.length}<\/span><\/div>${cards.map(r => _propCard(r)).join('')}<\/div>`;
+  }).join('');
+}
+
+function _propCard(r) {
+  const stale = SASDB.daysSince(r.lastTouch) >= 30;
+  return `<div class="prop-card ${stale ? 'stale-card' : ''}" onclick="viewDetail('properties','${r.id}')">
+    <div class="prop-address">${r.address || 'Unnamed Property'}<\/div>
+    <div class="prop-meta">${[r.propertyType, r.squareFeet ? r.squareFeet + ' SF' : '', r.submarket].filter(Boolean).join(' · ')}<\/div>
+    ${r.owner ? `<div class="prop-meta mt-1">Owner: ${r.owner}<\/div>` : ''}
+    ${stale ? `<div class="prop-meta mt-1" style="color:var(--orange)">&#9888; ${SASDB.daysSince(r.lastTouch)}d since last touch<\/div>` : ''}
+  <\/div>`;
+}
+
+function _renderPropTable(data) {
+  const tbody = document.getElementById('prop-tbody');
+  if (!tbody) return;
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:32px">No properties yet.</td></tr>'; return; }
+  tbody.innerHTML = data.map(r => {
+    const stale = SASDB.daysSince(r.lastTouch) >= 30;
+    return `<tr class="${stale?'stale-row':''}" onclick="viewDetail('properties','${r.id}')">
+      <td><strong>${r.address||'-'}<\/strong><\/td>
+      <td>${r.owner||'-'}<\/td>
+      <td>${r.propertyType||'-'}<\/td>
+      <td>${r.squareFeet||'-'}<\/td>
+      <td>${r.submarket||'-'}<\/td>
+      <td><span class="badge stage-${r.stage||'Cold'}">${r.stage||'Cold'}<\/span><\/td>
+      <td>${_daysAgoLabel(r.lastTouch)}<\/td>
+      <td>${r.source||'-'}<\/td>
+      <td>${r.addedBy||'-'}<\/td>
+    <\/tr>`;
+  }).join('');
+}
+
+// ——— REQUIREMENTS ———————————————————————————————————
+function renderRequirements() {
+  const q = (document.getElementById('req-search') || {}).value || '';
+  const type = (document.getElementById('req-filter-type') || {}).value || '';
+  const status = (document.getElementById('req-filter-status') || {}).value || '';
+  let data = SASDB.get('requirements');
+  if (q) data = data.filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
+  if (type) data = data.filter(r => r.propertyType === type);
+  if (status) data = data.filter(r => r.status === status);
+  const tbody = document.getElementById('req-tbody');
+  if (!tbody) return;
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:32px">No requirements yet. Add one or use the Pairlist Parser.<\/td><\/tr>'; return; }
+  tbody.innerHTML = data.map(r => {
+    const days = SASDB.daysSince(r.createdAt);
+    const stale = days >= 60;
+    return `<tr class="${stale?'stale-row':''}" onclick="viewDetail('requirements','${r.id}')">
+      <td><strong>${r.buyerName||'-'}<\/strong><\/td>
+      <td>${r.repBroker||'-'}<\/td>
+      <td>${r.propertyType||'-'}<\/td>
+      <td>${_sfRange(r.sizeMin, r.sizeMax)}<\/td>
+      <td>${r.budget||'-'}<\/td>
+      <td>${r.submarket||'-'}<\/td>
+      <td><span class="badge stage-${r.status||'Active'}">${r.status||'Active'}<\/span><\/td>
+      <td>${stale ? '<span style="color:var(--orange)">'+days+'d &#9888;<\/span>' : days+'d'}<\/td>
+      <td>${r.source||'-'}<\/td>
+    <\/tr>`;
+  }).join('');
+}
+
+// ——— CONTACTS ———————————————————————————————————————
+function renderContacts() {
+  const q = (document.getElementById('contact-search') || {}).value || '';
+  const role = (document.getElementById('contact-filter-role') || {}).value || '';
+  const rel = (document.getElementById('contact-filter-rel') || {}).value || '';
+  let data = SASDB.get('contacts');
+  if (q) data = data.filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
+  if (role) data = data.filter(r => r.role === role);
+  if (rel) data = data.filter(r => r.relationship === rel);
+  const tbody = document.getElementById('contact-tbody');
+  if (!tbody) return;
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:32px">No contacts yet.<\/td><\/tr>'; return; }
+  tbody.innerHTML = data.map(r => {
+    const relDots = _relDots(r.relationship);
+    return `<tr onclick="viewDetail('contacts','${r.id}')">
+      <td><strong>${r.name||'-'}<\/strong><\/td>
+      <td>${r.firm||'-'}<\/td>
+      <td>${r.role||'-'}<\/td>
+      <td>${r.specialty||'-'}<\/td>
+      <td>${r.phone ? '<a href="tel:'+r.phone+'" onclick="event.stopPropagation()">'+r.phone+'<\/a>' : '-'}<\/td>
+      <td>${r.email ? '<a href="mailto:'+r.email+'" onclick="event.stopPropagation()">'+r.email+'<\/a>' : '-'}<\/td>
+      <td>${relDots}<\/td>
+      <td>${_daysAgoLabel(r.lastTouch)}<\/td>
+      <td class="text-muted text-small">${r.notes ? r.notes.substring(0,60)+'...' : '-'}<\/td>
+    <\/tr>`;
+  }).join('');
+}
+
+// ——— MARKET INTEL ———————————————————————————————————
+function renderIntel() {
+  const q = (document.getElementById('intel-search') || {}).value || '';
+  const type = (document.getElementById('intel-filter-type') || {}).value || '';
+  const sub = (document.getElementById('intel-filter-sub') || {}).value || '';
+  let data = SASDB.get('intel');
+  if (q) data = data.filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
+  if (type) data = data.filter(r => r.type === type);
+  if (sub) data = data.filter(r => r.submarket === sub);
+  data.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const tbody = document.getElementById('intel-tbody');
+  if (!tbody) return;
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:32px">No market intel yet.<\/td><\/tr>'; return; }
+  tbody.innerHTML = data.map(r => {
+    const impCls = r.impact === 'High' ? 'badge-red' : r.impact === 'Medium' ? 'badge-orange' : 'badge-gray';
+    return `<tr onclick="viewDetail('intel','${r.id}')">
+      <td><strong>${r.title||'-'}<\/strong><\/td>
+      <td>${r.type||'-'}<\/td>
+      <td>${r.submarket||'-'}<\/td>
+      <td><span class="badge ${impCls}">${r.impact||'Low'}<\/span><\/td>
+      <td>${r.date||'-'}<\/td>
+      <td class="text-small">${r.source||'-'}<\/td>
+      <td class="text-small text-muted">${r.linkedProperties||'-'}<\/td>
+      <td>${r.addedBy||'-'}<\/td>
+    <\/tr>`;
+  }).join('');
+}
+
+// ——— DEALS ——————————————————————————————————————————
+function renderDeals() {
+  const q = (document.getElementById('deal-search') || {}).value || '';
+  const type = (document.getElementById('deal-filter-type') || {}).value || '';
+  let data = SASDB.get('deals');
+  if (q) data = data.filter(r => JSON.stringify(r).toLowerCase().includes(q.toLowerCase()));
+  if (type) data = data.filter(r => r.type === type);
+  data.sort((a,b) => new Date(b.closeDate||b.createdAt) - new Date(a.closeDate||a.createdAt));
+  const tbody = document.getElementById('deal-tbody');
+  if (!tbody) return;
+  if (!data.length) { tbody.innerHTML = '<tr><td colspan="10" class="text-muted" style="text-align:center;padding:32px">No deals yet.<\/td><\/tr>'; return; }
+  tbody.innerHTML = data.map(r => `<tr onclick="viewDetail('deals','${r.id}')">
+    <td><strong>${r.address||'-'}<\/strong><\/td>
+    <td>${r.type||'-'}<\/td>
+    <td>${r.client||'-'}<\/td>
+    <td>${r.closeDate||'-'}<\/td>
+    <td>${r.price||'-'}<\/td>
+    <td>${r.squareFeet ? Number(r.squareFeet).toLocaleString() : '-'}<\/td>
+    <td>${r.pricePerSF||'-'}<\/td>
+    <td>${r.capRate||'-'}<\/td>
+    <td>${r.role||'-'}<\/td>
+    <td>${r.coBroker||'-'}<\/td>
+  <\/tr>`).join('');
+}
+
+<\/script>
+<script>
+// ——— MODALS: OPEN / CLOSE ————————————————————————————
+function openPropModal(id) {
+  _editId = id || null; _editCol = 'properties';
+  document.getElementById('prop-modal-title').textContent = id ? 'Edit Property' : 'Add Property';
+  if (id) {
+    const r = SASDB.getById('properties', id);
+    if (r) {
+      _setVal('p-address', r.address); _setVal('p-owner', r.owner);
+      _setVal('p-type', r.propertyType); _setVal('p-sf', r.squareFeet);
+      _setVal('p-sub', r.submarket); _setVal('p-stage', r.stage);
+      _setVal('p-price', r.askingPrice); _setVal('p-phone', r.ownerPhone);
+      _setVal('p-email', r.ownerEmail); _setVal('p-source', r.source);
+      _setVal('p-zoning', r.zoning); _setVal('p-by', r.addedBy);
+      _setVal('p-motivation', r.motivation); _setVal('p-followup', r.followupDate);
+      _setVal('p-notes', r.notes);
+    }
+  } else { document.querySelectorAll('#prop-modal input, #prop-modal textarea, #prop-modal select').forEach(el => { if(el.tagName==='SELECT'&&el.id!=='p-stage'&&el.id!=='p-by') el.value=''; else if(el.tagName!=='SELECT') el.value=''; }); }
+  document.getElementById('prop-modal').classList.remove('hidden');
+}
+function closePropModal() { document.getElementById('prop-modal').classList.add('hidden'); _editId=null; }
+
+function saveProp() {
+  const addr = document.getElementById('p-address').value.trim();
+  if (!addr) { alert('Address is required'); return; }
+  const data = {
+    address: addr, owner: _getVal('p-owner'), propertyType: _getVal('p-type'),
+    squareFeet: _getVal('p-sf'), submarket: _getVal('p-sub'), stage: _getVal('p-stage') || 'Cold',
+    askingPrice: _getVal('p-price'), ownerPhone: _getVal('p-phone'), ownerEmail: _getVal('p-email'),
+    source: _getVal('p-source'), zoning: _getVal('p-zoning'), addedBy: _getVal('p-by'),
+    motivation: _getVal('p-motivation'), followupDate: _getVal('p-followup'), notes: _getVal('p-notes')
+  };
+  if (_editId) SASDB.update('properties', _editId, data);
+  else SASDB.add('properties', data);
+  closePropModal(); renderProperties();
+}
+
+function openReqModal(id) {
+  _editId = id || null; _editCol = 'requirements';
+  document.getElementById('req-modal-title').textContent = id ? 'Edit Requirement' : 'Add Requirement';
+  if (id) {
+    const r = SASDB.getById('requirements', id);
+    if (r) {
+      _setVal('r-buyer', r.buyerName); _setVal('r-broker', r.repBroker);
+      _setVal('r-type', r.propertyType); _setVal('r-sf-min', r.sizeMin);
+      _setVal('r-sf-max', r.sizeMax); _setVal('r-budget', r.budget);
+      _setVal('r-sub', r.submarket); _setVal('r-timeline', r.timeline);
+      _setVal('r-source', r.source); _setVal('r-status', r.status);
+      _setVal('r-by', r.addedBy); _setVal('r-must', r.mustHaves);
+      _setVal('r-notes', r.notes);
+    }
+  } else { document.querySelectorAll('#req-modal input, #req-modal textarea').forEach(el => el.value=''); }
+  document.getElementById('req-modal').classList.remove('hidden');
+}
+function closeReqModal() { document.getElementById('req-modal').classList.add('hidden'); _editId=null; }
+
+function saveReq() {
+  const buyer = document.getElementById('r-buyer').value.trim();
+  if (!buyer) { alert('Buyer/Tenant name is required'); return; }
+  const data = {
+    buyerName: buyer, repBroker: _getVal('r-broker'), propertyType: _getVal('r-type'),
+    sizeMin: _getVal('r-sf-min'), sizeMax: _getVal('r-sf-max'), budget: _getVal('r-budget'),
+    submarket: _getVal('r-sub') || 'Triangle Wide', timeline: _getVal('r-timeline'),
+    source: _getVal('r-source'), status: _getVal('r-status') || 'Active',
+    addedBy: _getVal('r-by'), mustHaves: _getVal('r-must'), notes: _getVal('r-notes')
+  };
+  if (_editId) SASDB.update('requirements', _editId, data);
+  else SASDB.add('requirements', data);
+  closeReqModal(); renderRequirements();
+}
+
+function openContactModal(id) {
+  _editId = id || null; _editCol = 'contacts';
+  document.getElementById('contact-modal-title').textContent = id ? 'Edit Contact' : 'Add Contact';
+  if (id) {
+    const r = SASDB.getById('contacts', id);
+    if (r) {
+      _setVal('c-name', r.name); _setVal('c-firm', r.firm);
+      _setVal('c-role', r.role); _setVal('c-specialty', r.specialty);
+      _setVal('c-rel', r.relationship); _setVal('c-phone', r.phone);
+      _setVal('c-email', r.email); _setVal('c-activity', r.knownActivity);
+      _setVal('c-notes', r.notes);
+    }
+  } else { document.querySelectorAll('#contact-modal input, #contact-modal textarea').forEach(el => el.value=''); }
+  document.getElementById('contact-modal').classList.remove('hidden');
+}
+function closeContactModal() { document.getElementById('contact-modal').classList.add('hidden'); _editId=null; }
+
+function saveContact() {
+  const name = document.getElementById('c-name').value.trim();
+  if (!name) { alert('Name is required'); return; }
+  const data = {
+    name, firm: _getVal('c-firm'), role: _getVal('c-role'),
+    specialty: _getVal('c-specialty'), relationship: _getVal('c-rel') || 'Cold',
+    phone: _getVal('c-phone'), email: _getVal('c-email'),
+    knownActivity: _getVal('c-activity'), notes: _getVal('c-notes')
+  };
+  if (_editId) SASDB.update('contacts', _editId, data);
+  else SASDB.add('contacts', data);
+  closeContactModal(); renderContacts();
+}
+
+function openIntelModal(id) {
+  _editId = id || null;
+  document.getElementById('intel-modal-title').textContent = id ? 'Edit Intel' : 'Add Market Intel';
+  if (id) {
+    const r = SASDB.getById('intel', id);
+    if (r) {
+      _setVal('i-title', r.title); _setVal('i-type', r.type);
+      _setVal('i-sub', r.submarket); _setVal('i-impact', r.impact);
+      _setVal('i-date', r.date); _setVal('i-source', r.source);
+      _setVal('i-props', r.linkedProperties); _setVal('i-notes', r.notes);
+    }
+  } else {
+    document.querySelectorAll('#intel-modal input, #intel-modal textarea').forEach(el => el.value='');
+    document.getElementById('i-date').value = new Date().toISOString().split('T')[0];
+  }
+  document.getElementById('intel-modal').classList.remove('hidden');
+}
+function closeIntelModal() { document.getElementById('intel-modal').classList.add('hidden'); _editId=null; }
+
+function saveIntel() {
+  const title = document.getElementById('i-title').value.trim();
+  if (!title) { alert('Title is required'); return; }
+  const data = {
+    title, type: _getVal('i-type'), submarket: _getVal('i-sub') || 'Triangle Wide',
+    impact: _getVal('i-impact') || 'Medium', date: _getVal('i-date'),
+    source: _getVal('i-source'), linkedProperties: _getVal('i-props'), notes: _getVal('i-notes')
+  };
+  if (_editId) SASDB.update('intel', _editId, data);
+  else SASDB.add('intel', data);
+  closeIntelModal(); renderIntel();
+}
+
+function openDealModal(id) {
+  _editId = id || null;
+  document.getElementById('deal-modal-title').textContent = id ? 'Edit Deal' : 'Add Deal';
+  if (id) {
+    const r = SASDB.getById('deals', id);
+    if (r) {
+      _setVal('d-address', r.address); _setVal('d-type', r.type);
+      _setVal('d-client', r.client); _setVal('d-role', r.role);
+      _setVal('d-close', r.closeDate); _setVal('d-price', r.price);
+      _setVal('d-sf', r.squareFeet); _setVal('d-psf', r.pricePerSF);
+      _setVal('d-cap', r.capRate); _setVal('d-cobroker', r.coBroker);
+      _setVal('d-notes', r.notes);
+    }
+  } else { document.querySelectorAll('#deal-modal input, #deal-modal textarea').forEach(el => el.value=''); }
+  document.getElementById('deal-modal').classList.remove('hidden');
+}
+function closeDealModal() { document.getElementById('deal-modal').classList.add('hidden'); _editId=null; }
+
+function saveDeal() {
+  const addr = document.getElementById('d-address').value.trim();
+  if (!addr) { alert('Property address is required'); return; }
+  const sf = parseFloat(_getVal('d-sf')) || 0;
+  const price = parseFloat((_getVal('d-price')||'').replace(/[^0-9.]/g,'')) || 0;
+  const psf = sf && price ? '$' + (price/sf).toFixed(2) : _getVal('d-psf');
+  const data = {
+    address: addr, type: _getVal('d-type') || 'Sale', client: _getVal('d-client'),
+    role: _getVal('d-role'), closeDate: _getVal('d-close'), price: _getVal('d-price'),
+    squareFeet: _getVal('d-sf'), pricePerSF: psf, capRate: _getVal('d-cap'),
+    coBroker: _getVal('d-cobroker'), notes: _getVal('d-notes')
+  };
+  if (_editId) SASDB.update('deals', _editId, data);
+  else SASDB.add('deals', data);
+  closeDealModal(); renderDeals();
+}
+
+// ——— PAIRLIST PARSER —————————————————————————————————
+function openPairlistParser() { document.getElementById('pairlist-modal').classList.remove('hidden'); }
+function closePairlistParser() { document.getElementById('pairlist-modal').classList.add('hidden'); _pairlistStaged=[]; }
+
+function parsePairlist() {
+  const raw = document.getElementById('pairlist-input').value;
+  if (!raw.trim()) { alert('Paste email text first'); return; }
+  _pairlistStaged = [];
+  // Split by common ISO separators
+  const blocks = raw.split(/\n{2,}|(?=ISO:|Looking for:|SEEKING:|seeking:|Tenant:|TENANT:)/i).filter(b => b.trim().length > 20);
+  for (const block of blocks) {
+    const lower = block.toLowerCase();
+    if (!lower.includes('iso') && !lower.includes('looking for') && !lower.includes('seeking') && !lower.includes('need') && !lower.includes('sf') && !lower.includes('square')) continue;
+    const req = _parseISO(block);
+    if (req.buyerName || req.propertyType) _pairlistStaged.push(req);
+  }
+  const res = document.getElementById('pairlist-results');
+  const btn = document.getElementById('pairlist-import-btn');
+  if (!_pairlistStaged.length) {
+    res.innerHTML = '<div class="text-muted text-small">No ISOs detected. Try formatting: each ISO on its own paragraph with SF size mentioned.</div>';
+    btn.style.display = 'none';
+    return;
+  }
+  btn.style.display = '';
+  res.innerHTML = '<div class="font-bold mb-2">' + _pairlistStaged.length + ' ISOs detected — review before importing:<\/div>' +
+    _pairlistStaged.map((r,i) => `<div class="card mb-2"><div class="card-body" style="padding:12px">
+      <div class="flex justify-between items-center"><strong>${r.buyerName||'Unknown Buyer'}<\/strong><span class="badge badge-gold">${r.propertyType||'Unknown Type'}<\/span><\/div>
+      <div class="text-small mt-1 text-muted">Size: ${_sfRange(r.sizeMin,r.sizeMax)} · Submarket: ${r.submarket} · Budget: ${r.budget||'Not stated'}<\/div>
+      ${r.notes ? '<div class="text-tiny mt-1 text-muted">'+r.notes.substring(0,120)+'<\/div>' : ''}
+    <\/div><\/div>`).join('');
+}
+
+function _parseISO(block) {
+  const req = { status: 'Active', source: 'Pairlist', submarket: 'Triangle Wide' };
+  // Extract size
+  const sfMatch = block.match(/(\d[\d,]*(?:\.\d+)?)\s*(?:-|to|–)\s*(\d[\d,]*(?:\.\d+)?)\s*(?:sf|sq|square)/i);
+  if (sfMatch) { req.sizeMin = sfMatch[1].replace(/,/g,''); req.sizeMax = sfMatch[2].replace(/,/g,''); }
+  else {
+    const singleSF = block.match(/(\d[\d,]+)\s*(?:sf|sq ft)/i);
+    if (singleSF) { req.sizeMin = singleSF[1].replace(/,/g,''); req.sizeMax = singleSF[1].replace(/,/g,''); }
+  }
+  // Property type
+  if (/industrial|warehouse|distribution/i.test(block)) req.propertyType = 'Industrial';
+  else if (/flex/i.test(block)) req.propertyType = 'Flex';
+  else if (/office/i.test(block)) req.propertyType = 'Office';
+  else if (/retail|restaurant|strip/i.test(block)) req.propertyType = 'Retail';
+  else if (/land|acre|lot/i.test(block)) req.propertyType = 'Land';
+  // Submarket
+  if (/rdu|airport/i.test(block)) req.submarket = 'RDU / Airport';
+  else if (/durham/i.test(block)) req.submarket = 'Durham';
+  else if (/cary|apex/i.test(block)) req.submarket = 'Cary / Apex';
+  else if (/garner|clayton/i.test(block)) req.submarket = 'Garner / Clayton';
+  else if (/chapel hill/i.test(block)) req.submarket = 'Chapel Hill';
+  else if (/i-40|i40/i.test(block)) req.submarket = 'I-40 Corridor';
+  // Budget
+  const budgetMatch = block.match(/\$(\d[\d,\.]*(?:\/sf)?(?:\s*nnn)?)/i);
+  if (budgetMatch) req.budget = '$' + budgetMatch[1];
+  // Name from first line
+  const firstLine = block.split('\n')[0].trim();
+  if (firstLine.length < 80) req.buyerName = firstLine.replace(/^(iso|looking for|seeking):\s*/i,'').trim();
+  req.notes = block.trim().substring(0, 300);
+  return req;
+}
+
+function importPairlistResults() {
+  if (!_pairlistStaged.length) return;
+  let count = 0;
+  for (const r of _pairlistStaged) { SASDB.add('requirements', r); count++; }
+  alert('Imported ' + count + ' requirements from Pairlist!');
+  closePairlistParser();
+  renderRequirements();
+}
+
+// ——— CSV IMPORT ——————————————————————————————————————
+function openCSVImport(col) {
+  _csvCol = col; _csvRows = [];
+  document.getElementById('csv-file').value = '';
+  document.getElementById('csv-preview').innerHTML = '';
+  document.getElementById('csv-import-btn').style.display = 'none';
+  document.getElementById('csv-modal').classList.remove('hidden');
+  document.getElementById('csv-file').onchange = _handleCSVFile;
+}
+function closeCSVImport() { document.getElementById('csv-modal').classList.add('hidden'); }
+
+function _handleCSVFile(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const text = ev.target.result;
+    _csvRows = _parseCSV(text);
+    const preview = document.getElementById('csv-preview');
+    const btn = document.getElementById('csv-import-btn');
+    if (!_csvRows.length) { preview.innerHTML = '<div class="text-muted">No rows found.<\/div>'; return; }
+    preview.innerHTML = '<div class="text-small font-bold mb-2">' + _csvRows.length + ' rows detected. First 3:<\/div>' +
+      '<div style="overflow-x:auto;font-size:11px;font-family:monospace;background:var(--gray-50);padding:8px;border-radius:4px">' +
+      _csvRows.slice(0,3).map(r => JSON.stringify(r)).join('\n') + '<\/div>';
+    btn.style.display = '';
+  };
+  reader.readAsText(file);
+}
+
+function doCSVImport() {
+  if (!_csvRows.length || !_csvCol) return;
+  const count = SASDB.importCSV(_csvCol, _csvRows);
+  alert('Imported ' + count + ' records!');
+  closeCSVImport();
+  _renderSection(_currentSection());
+}
+
+function _parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g,''));
+  return lines.slice(1).map(line => {
+    const vals = line.split(',').map(v => v.trim().replace(/^"|"$/g,''));
+    const obj = {};
+    headers.forEach((h,i) => { obj[h] = vals[i] || ''; });
+    return obj;
+  }).filter(r => Object.values(r).some(v => v));
+}
+
+// ——— DETAIL VIEW —————————————————————————————————————
+function viewDetail(col, id) {
+  const r = SASDB.getById(col, id);
+  if (!r) return;
+  const title = document.getElementById('detail-title');
+  const body = document.getElementById('detail-body');
+  const footer = document.getElementById('detail-footer');
+  const colLabel = _colLabel(col);
+  const stale = SASDB.daysSince(r.lastTouch) >= 30;
+  title.textContent = r.address || r.name || r.buyerName || r.title || colLabel + ' Detail';
+  // Build field display
+  const skip = new Set(['id','createdAt','updatedAt']);
+  const fields = Object.entries(r)
+    .filter(([k]) => !skip.has(k))
+    .map(([k,v]) => v ? `<div class="flex gap-2 mb-2"><span class="text-muted text-small" style="min-width:140px">${_camel(k)}<\/span><span class="text-small font-bold">${v}<\/span><\/div>` : '')
+    .join('');
+  body.innerHTML = `${stale ? '<div class="stale-alert">&#9888; Not touched in '+SASDB.daysSince(r.lastTouch)+' days<\/div>' : ''}<div>${fields}<\/div>`;
+  footer.innerHTML = `
+    <button class="btn btn-outline btn-sm" onclick="SASDB.touch('${col}','${id}'); closeDetailModal(); _renderSection(_currentSection())">&#10003; Mark Touched<\/button>
+    <button class="btn btn-ghost btn-sm btn-danger" onclick="if(confirm('Delete this record?')){SASDB.remove('${col}','${id}');closeDetailModal();_renderSection(_currentSection());}">&#128465; Delete<\/button>
+    <span style="flex:1"><\/span>
+    <button class="btn btn-outline" onclick="closeDetailModal()">Close<\/button>
+    <button class="btn btn-primary" onclick="closeDetailModal(); _openEdit('${col}','${id}')">&#9998; Edit<\/button>
+  `;
+  document.getElementById('detail-modal').classList.remove('hidden');
+}
+
+function closeDetailModal() { document.getElementById('detail-modal').classList.add('hidden'); }
+
+function _openEdit(col, id) {
+  if (col==='properties') openPropModal(id);
+  else if (col==='requirements') openReqModal(id);
+  else if (col==='contacts') openContactModal(id);
+  else if (col==='intel') openIntelModal(id);
+  else if (col==='deals') openDealModal(id);
+}
+
+function _closeAllModals() {
+  ['prop-modal','req-modal','contact-modal','intel-modal','deal-modal','pairlist-modal','csv-modal','detail-modal']
+    .forEach(id => document.getElementById(id)?.classList.add('hidden'));
+}
+
+// ——— HELPERS —————————————————————————————————————————
+function _getVal(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
+function _setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; }
+function _cap(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+function _camel(s) { return s.replace(/([A-Z])/g,' $1').replace(/^./,c=>c.toUpperCase()); }
+function _colLabel(col) { return {properties:'Properties',requirements:'Requirements',contacts:'Contacts',intel:'Market Intel',deals:'Deals'}[col]||col; }
+function _sfRange(min,max) {
+  if (!min && !max) return '-';
+  if (min === max) return Number(min).toLocaleString() + ' SF';
+  return (min ? Number(min).toLocaleString() : '?') + ' – ' + (max ? Number(max).toLocaleString() : '?') + ' SF';
+}
+function _daysAgoLabel(dateStr) {
+  const d = SASDB.daysSince(dateStr);
+  if (d === 9999) return '-';
+  if (d === 0) return 'Today';
+  if (d === 1) return 'Yesterday';
+  if (d >= 30) return '<span style="color:var(--orange)">' + d + 'd ago &#9888;<\/span>';
+  return d + 'd ago';
+}
+function _timeAgo(iso) {
+  if (!iso) return '';
+  const d = Math.floor((Date.now() - new Date(iso)) / 60000);
+  if (d < 1) return 'just now';
+  if (d < 60) return d + 'm ago';
+  if (d < 1440) return Math.floor(d/60) + 'h ago';
+  return Math.floor(d/1440) + 'd ago';
+}
+function _relDots(rel) {
+  const levels = { Cold: 1, Warm: 2, Hot: 3 };
+  const n = levels[rel] || 1;
+  return '<span class="rel-dots">' + [1,2,3].map(i => '<span class="rel-dot' + (i<=n?' filled':'') + '"><\/span>').join('') + '<\/span> <span class="text-tiny text-muted">' + (rel||'Cold') + '<\/span>';
+}
+<\/script>
+</body>
+</html>
