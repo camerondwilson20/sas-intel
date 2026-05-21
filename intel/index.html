@@ -214,7 +214,10 @@
       <div class="page-title">Market Intelligence</div>
       <div class="page-subtitle">NCDOT projects, permits, zoning changes, supply pipeline</div>
     </div>
-    <button class="btn btn-primary" onclick="openIntelModal()">+ Add Intel</button>
+    <div class="flex gap-2">
+<button class="btn btn-outline" onclick="toggleTBJMap()" id="tbj-map-btn">&#127758; TBJ Map</button>
+<button class="btn btn-primary" onclick="openIntelModal()">+ Add Intel</button>
+</div>
   </div>
 
   <div class="search-bar mb-4">
@@ -248,6 +251,52 @@
     </table>
   </div>
 </section>
+
+<!-- TBJ Map Panel -->
+<div id="tbj-map-panel" class="hidden" style="margin-bottom:20px">
+  <div class="card">
+    <div class="card-header" style="padding:12px 16px">
+      <span class="card-title">&#127758; Triangle Business Journal — Market Map</span>
+      <div class="flex gap-2">
+        <a href="https://www.bizjournals.com/triangle/news/real-estate/" target="_blank" class="btn btn-sm btn-outline">Open TBJ Full Site &#8599;</a>
+        <button class="btn btn-sm btn-ghost" onclick="toggleTBJMap()">&#x2715; Close</button>
+      </div>
+    </div>
+    <div class="card-body" style="padding:0">
+      <div style="background:var(--gray-50);border-radius:0 0 10px 10px;padding:24px;text-align:center">
+        <div style="font-size:14px;font-weight:600;color:var(--navy);margin-bottom:8px">TBJ Real Estate Coverage — Triangle Market</div>
+        <div style="font-size:12px;color:var(--gray-500);margin-bottom:16px">Click a TBJ article to research, then use "+ Add Intel" to log it to your database.</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-bottom:20px">
+          <a href="https://www.bizjournals.com/triangle/news/real-estate/" target="_blank" class="btn btn-outline" style="justify-content:center;flex-direction:column;height:72px;gap:4px">
+            <span style="font-size:20px">&#127968;</span>
+            <span style="font-size:12px">RE News</span>
+          </a>
+          <a href="https://www.bizjournals.com/triangle/search/results?q=industrial+real+estate" target="_blank" class="btn btn-outline" style="justify-content:center;flex-direction:column;height:72px;gap:4px">
+            <span style="font-size:20px">&#127981;</span>
+            <span style="font-size:12px">Industrial</span>
+          </a>
+          <a href="https://www.bizjournals.com/triangle/search/results?q=office+real+estate+triangle" target="_blank" class="btn btn-outline" style="justify-content:center;flex-direction:column;height:72px;gap:4px">
+            <span style="font-size:20px">&#127970;</span>
+            <span style="font-size:12px">Office</span>
+          </a>
+          <a href="https://www.bizjournals.com/triangle/search/results?q=retail+real+estate+raleigh" target="_blank" class="btn btn-outline" style="justify-content:center;flex-direction:column;height:72px;gap:4px">
+            <span style="font-size:20px">&#127978;</span>
+            <span style="font-size:12px">Retail</span>
+          </a>
+          <a href="https://www.bizjournals.com/triangle/search/results?q=construction+permit+raleigh" target="_blank" class="btn btn-outline" style="justify-content:center;flex-direction:column;height:72px;gap:4px">
+            <span style="font-size:20px">&#128295;</span>
+            <span style="font-size:12px">Permits</span>
+          </a>
+          <a href="https://www.bizjournals.com/triangle/search/results?q=zoning+raleigh+durham" target="_blank" class="btn btn-outline" style="justify-content:center;flex-direction:column;height:72px;gap:4px">
+            <span style="font-size:20px">&#128205;</span>
+            <span style="font-size:12px">Zoning</span>
+          </a>
+        </div>
+        <div style="font-size:11px;color:var(--gray-400)">&#9432; TBJ articles open in a new tab. After reading, click "+ Add Intel" to log the story to your market intel database.</div>
+      </div>
+    </div>
+  </div>
+</div>
 
 <!-- ===== DEAL HISTORY ===== -->
 <section id="sec-deals" class="section">
@@ -1059,6 +1108,7 @@ function renderDeals() {
 }
 
 <\/script>
+</script>
 <script>
 // ——— MODALS: OPEN / CLOSE ————————————————————————————
 function openPropModal(id) {
@@ -1094,6 +1144,8 @@ function saveProp() {
   if (_editId) SASDB.update('properties', _editId, data);
   else SASDB.add('properties', data);
   closePropModal(); renderProperties();
+  const newMatches = SASDB.runMatches();
+  if (window.location.hash.replace('#','') === 'dashboard' || !window.location.hash) _renderMatches(newMatches);
 }
 
 function openReqModal(id) {
@@ -1128,6 +1180,8 @@ function saveReq() {
   if (_editId) SASDB.update('requirements', _editId, data);
   else SASDB.add('requirements', data);
   closeReqModal(); renderRequirements();
+  const newMatches = SASDB.runMatches();
+  if (window.location.hash.replace('#','') === 'dashboard' || !window.location.hash) _renderMatches(newMatches);
 }
 
 function openContactModal(id) {
@@ -1391,6 +1445,16 @@ function _closeAllModals() {
     .forEach(id => document.getElementById(id)?.classList.add('hidden'));
 }
 
+// ——— TBJ MAP ——————————————————————————————————————————
+function toggleTBJMap() {
+  const panel = document.getElementById('tbj-map-panel');
+  const btn = document.getElementById('tbj-map-btn');
+  if (!panel) return;
+  const isHidden = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden', !isHidden);
+  if (btn) btn.style.background = isHidden ? 'rgba(201,168,76,.15)' : '';
+}
+
 // ——— HELPERS —————————————————————————————————————————
 function _getVal(id) { const el = document.getElementById(id); return el ? el.value.trim() : ''; }
 function _setVal(id, v) { const el = document.getElementById(id); if (el) el.value = v || ''; }
@@ -1424,5 +1488,6 @@ function _relDots(rel) {
   return '<span class="rel-dots">' + [1,2,3].map(i => '<span class="rel-dot' + (i<=n?' filled':'') + '"><\/span>').join('') + '<\/span> <span class="text-tiny text-muted">' + (rel||'Cold') + '<\/span>';
 }
 <\/script>
+</script>
 </body>
 </html>
