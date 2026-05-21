@@ -100,6 +100,17 @@ window.SASDB = (function () {
     return result;
   }
 
+
+  // — Summary Helper ————————————————————————
+  function _summary(col, rec) {
+    if (col === 'properties') return rec.address || 'Unnamed property';
+    if (col === 'requirements') return rec.buyerName || 'Unknown buyer';
+    if (col === 'contacts') return rec.name || 'Unknown contact';
+    if (col === 'intel') return rec.title || 'Market intel';
+    if (col === 'deals') return rec.address || 'Unnamed deal';
+    return rec.id || 'Record';
+  }
+
   // — Activity Log ————————————————————————
   function _logActivity(action, col, id, summary) {
     const log = _load('activity');
